@@ -141,7 +141,7 @@ export const useAdditionsStore = defineStore('additions', {
         this.batchStatus = 'pending';
         this.scheduleBatch(BATCH_INTERVAL - elapsed);
       } else {
-        this.scheduleBatch(0); // окно истекло — отправляем сразу
+        this.sendBatch(); // окно истекло — отправляем сразу
       }
     },
 

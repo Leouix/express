@@ -34,7 +34,7 @@ useInfiniteScroll(rightList, () => { store.loadMoreRight(); }, { intervalMs: 200
     <div class="add-bar">
       <input v-model="newManualId" type="number" placeholder="Введите новый ID" />
       <button @click="additionsStore.addNewId">Добавить в очередь</button>
-      <span class="status" v-if="pendingAdditions.length">В очереди на добавление: {{ pendingAdditions.length }}</span>
+      <span class="status" v-if="additionsStore.batchStatus === 'pending'">В очереди на добавление: {{ pendingAdditions.length }}</span>
       <span class="status success" v-if="batchResult && batchResult.added.length">
         Добавлено: {{ batchResult.added.length }}
       </span>
