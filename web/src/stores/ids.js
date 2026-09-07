@@ -35,6 +35,10 @@ export const useIdsStore = defineStore('ids', {
     // --- Статус/очередь добавлений: переживают перезагрузку страницы ---
     batchStatus: localStorage.getItem('batchStatus') || 'empty',
     updatesStatus: localStorage.getItem('updatesStatus') || 'idle',
+
+    // -- Результат последней отправки батча (для обратной связи с сервером) --
+    // { added: [...], duplicates: [...] } или null, если батч ещё не отправлялся
+    batchResult: null,
   }),
 
   getters: {
@@ -77,7 +81,7 @@ export const useIdsStore = defineStore('ids', {
       }
 
       try {
-        await axios.post(`${API_URL}/items/add-batch`, { newIds: queue });
+        const { data } = await axios.post(`${API_URL}/items/add-batch`, { newIds: queue });
 
         // Успешно отправлено: очищаем очередь, фиксируем время и статус
         setStoredQueue([]);
@@ -85,10 +89,38 @@ export const useIdsStore = defineStore('ids', {
         localStorage.setItem('lastSentTime', Date.now().toString());
         localStorage.setItem('batchStatus', 'empty');
         this.batchStatus = 'empty';
+
+        // Сервер — авторитетный источник: он знает все 1 000 000 + добавленные ID.
+        // Дубликаты, не замеченные клиентской проверкой, возвращаются сюда.
+        const duplicates = data.duplicates || [];
+        this.batchResult = {
+          added: data.added || [],
+          duplicates,
+        };
+        this.scheduleBatchResultClear();
+
+        // Откатываем оптимистичное UI-обновление: дубликаты добавлялись в список
+        // в addNewId() до подтверждения сервера — теперь их нужно убрать.
+        if (duplicates.length) {
+          const dupSet = new Set(duplicates.map(Number));
+          this.unselected = this.unselected.filter(id => !dupSet.has(id));
+          this.selected = this.selected.filter(id => !dupSet.has(id));
+        }
       } catch (error) {
         console.error('Ошибка отправки батча:', error);
         // Очередь остаётся в localStorage — повтор отправится при следующем addNewId/перезагрузке
       }
+    },
+
+    // Автоскрытие сообщения о результате батча через 5 секунд
+    scheduleBatchResultClear() {
+      if (window._batchResultTimeout) {
+        clearTimeout(window._batchResultTimeout);
+      }
+      window._batchResultTimeout = setTimeout(() => {
+        window._batchResultTimeout = null;
+        this.batchResult = null;
+      }, 5000);
     },
 
     // Планирует sendBatch через delay мс (чистит предыдущий таймер)
@@ -106,7 +138,10 @@ export const useIdsStore = defineStore('ids', {
       if (!this.newManualId) return;
       const numId = Number(this.newManualId);
 
-      // Проверка дубликатов: очередь + левая колонка + правая колонка
+      // Быстрая предварительная проверка по уже загруженным данным:
+      // очередь + левая колонка + правая колонка.
+      // Она НЕ видит не загруженные страницы (ID 1-1000000 существуют на сервере),
+      // поэтому итоговый ответ о дубликатах даёт сервер в sendBatch().
       const currentQueue = getStoredQueue();
       if (
         currentQueue.includes(numId) ||
@@ -273,6 +308,10 @@ export const useIdsStore = defineStore('ids', {
     },
 
     dispose() {
+      if (window._batchResultTimeout) {
+        clearTimeout(window._batchResultTimeout);
+        window._batchResultTimeout = null;
+      }
       if (window._updatesTimeout) {
         clearTimeout(window._updatesTimeout);
         window._updatesTimeout = null;

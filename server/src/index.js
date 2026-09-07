@@ -84,6 +84,7 @@ app.post('/api/items/add-batch', async (req, res) => {
     // Ставим операцию в очередь
     await stateQueue.add(async () => {
         const added = [];
+        const duplicates = [];
         
         for (const id of newIds) {
             const numId = Number(id);
@@ -92,12 +93,15 @@ app.post('/api/items/add-batch', async (req, res) => {
                 allIdsSet.add(numId);
                 unselectedIds.push(numId); // Добавляем в конец левого списка
                 added.push(numId);
+            } else if (!isNaN(numId)) {
+                duplicates.push(numId);
             }
         }
-        console.log(`Добавлено новых уникальных ID: ${added.length}`);
+        console.log(`Добавлено новых уникальных ID: ${added.length}, дубликатов: ${duplicates.length}`);
+        return { added, duplicates };
+    }).then((result) => {
+        res.status(201).json({ success: true, ...result });
     });
-
-    res.status(201).json({ success: true });
 });
 
 // POST: Батч обновлений состояния (перенос и сортировка DnD раз в 1 сек)
@@ -109,19 +113,28 @@ app.post('/api/items/update-batch', async (req, res) => {
     if (!Array.isArray(actions)) return res.status(400).send('Invalid data');
 
     await stateQueue.add(async () => {
+        // Пересоздаём Set'ы заново перед обработкой батча:
+        // проверки наличия через Set работают за O(1), а не за O(n) как Array.includes
+        const selectedSet = new Set(selectedIds);
+        const unselectedSet = new Set(unselectedIds);
+
         for (const action of actions) {
             if (action.type === 'SELECT') {
                 // Перенос из левого в правое
                 unselectedIds = unselectedIds.filter(id => id !== action.id);
-                if (!selectedIds.includes(action.id)) {
+                unselectedSet.delete(action.id);
+                if (!selectedSet.has(action.id)) {
                     selectedIds.push(action.id);
+                    selectedSet.add(action.id);
                 }
             } 
             else if (action.type === 'UNSELECT') {
                 // Возврат в левое окно
                 selectedIds = selectedIds.filter(id => id !== action.id);
-                if (!unselectedIds.includes(action.id)) {
+                selectedSet.delete(action.id);
+                if (!unselectedSet.has(action.id)) {
                     unselectedIds.push(action.id); 
+                    unselectedSet.add(action.id);
                 }
             }
             else if (action.type === 'MOVE' && action.beforeId) {

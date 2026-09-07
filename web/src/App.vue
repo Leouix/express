@@ -15,6 +15,7 @@ const {
   newManualId,
   pendingAdditions,
   pendingUpdates,
+  batchResult,
 } = storeToRefs(store);
 
 const leftObserver = ref(null);
@@ -35,6 +36,12 @@ useInfiniteScroll(rightObserver, () => store.loadMoreRight());
       <input v-model="newManualId" type="number" placeholder="Введите новый ID" />
       <button @click="store.addNewId">Добавить в очередь</button>
       <span class="status" v-if="pendingAdditions.length">В очереди на добавление: {{ pendingAdditions.length }}</span>
+      <span class="status success" v-if="batchResult && batchResult.added.length">
+        Добавлено: {{ batchResult.added.length }}
+      </span>
+      <span class="status warn" v-if="batchResult && batchResult.duplicates.length">
+        Дубликаты отклонены ({{ batchResult.duplicates.length }}): {{ batchResult.duplicates.join(', ') }}
+      </span>
       <span class="status" v-if="pendingUpdates.length">Синхронизация сортировки...</span>
     </div>
 
@@ -95,6 +102,8 @@ useInfiniteScroll(rightObserver, () => store.loadMoreRight());
 .app-container { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }
 .add-bar { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
 .status { color: #666; font-size: 0.9em; }
+.status.success { color: #2e7d32; }
+.status.warn { color: #c62828; }
 .panes { display: flex; gap: 20px; }
 .pane { flex: 1; border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fafafa; }
 .search-input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
