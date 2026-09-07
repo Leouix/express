@@ -90,6 +90,66 @@ const scheduleBatch = (delay) => {
 };
 
 // ==========================================
+// 1.2 БАТЧИНГ «ОБНОВЛЕНИЙ» (localStorage + 1-сек окно)
+// ==========================================
+const UPDATES_INTERVAL = 1000; // 1 секунда
+const updatesStatus = ref(localStorage.getItem('updatesStatus') || 'idle');
+
+const getStoredUpdates = () => JSON.parse(localStorage.getItem('pendingUpdates') || '[]');
+const setStoredUpdates = (actions) => {
+  localStorage.setItem('pendingUpdates', JSON.stringify(actions));
+  pendingUpdates.value = actions;
+};
+
+const sendUpdates = async () => {
+  const actions = getStoredUpdates();
+  if (!actions.length) {
+    updatesStatus.value = 'idle';
+    localStorage.setItem('updatesStatus', 'idle');
+    return;
+  }
+
+  try {
+    await axios.post(`${API_URL}/items/update-batch`, { actions });
+
+    setStoredUpdates([]);
+    localStorage.setItem('lastUpdatesSentTime', Date.now().toString());
+    updatesStatus.value = 'idle';
+    localStorage.setItem('updatesStatus', 'idle');
+  } catch (error) {
+    console.error('Ошибка отправки обновлений:', error);
+    // Очередь остаётся в localStorage — повтор отправится при следующем действии/перезагрузке
+  }
+};
+
+// Таймер на оставшуюся часть окна; повторными кликами deadline не сдвигаем
+const scheduleUpdates = (delay) => {
+  if (window._updatesTimeout) return;
+  window._updatesTimeout = setTimeout(async () => {
+    window._updatesTimeout = null;
+    await sendUpdates();
+  }, delay);
+};
+
+// Добавляет действие в очередь и решает: отправить сразу или копить до конца окна
+const enqueueUpdate = (action) => {
+  const queue = getStoredUpdates();
+  queue.push(action);
+  setStoredUpdates(queue);
+
+  const lastSentTime = Number(localStorage.getItem('lastUpdatesSentTime') || 0);
+  const elapsed = Date.now() - lastSentTime;
+
+  if (elapsed < UPDATES_INTERVAL) {
+    updatesStatus.value = 'pending';
+    localStorage.setItem('updatesStatus', 'pending');
+    scheduleUpdates(UPDATES_INTERVAL - elapsed);
+  } else {
+    sendUpdates(); // первый запрос — отправляем сразу, не ждём 1 секунду
+  }
+};
+
+// ==========================================
 // 2. ЛОГИКА ИНТЕРФЕЙСА (ДЕЙСТВИЯ ЮЗЕРА)
 // ==========================================
 const addNewId = () => {
@@ -127,14 +187,14 @@ const selectItem = (id) => {
   selected.value.push(id);
 
   // Кладём в очередь
-  pendingUpdates.value.push({ type: 'SELECT', id });
+  enqueueUpdate({ type: 'SELECT', id });
 };
 
 const unselectItem = (id) => {
   selected.value = selected.value.filter(item => item !== id);
   unselected.value.push(id);
 
-  pendingUpdates.value.push({ type: 'UNSELECT', id });
+  enqueueUpdate({ type: 'UNSELECT', id });
 };
 
 // Срабатывает, когда отпустили мышку после перетаскивания
@@ -146,14 +206,12 @@ const onDragEnd = (event) => {
   // Элемент, который теперь стоит ПОСЛЕ перетащенного
   const beforeId = newIndex + 1 < selected.value.length ? selected.value[newIndex + 1] : null;
 
-  pendingUpdates.value.push({ type: 'MOVE', id: movedId, beforeId });
+  enqueueUpdate({ type: 'MOVE', id: movedId, beforeId });
 };
 
 // ==========================================
 // 3. ЖИЗНЕННЫЙ ЦИКЛ
 // ==========================================
-let updatesInterval;
-
 onMounted(() => {
   // --- Восстановление очереди добавлений из localStorage ---
   pendingAdditions.value = getStoredQueue();
@@ -174,20 +232,23 @@ onMounted(() => {
     }
   }
 
-  // --- Синхронизация выбора/сортировки: раз в 1 секунду ---
-  updatesInterval = setInterval(async () => {
-    if (!pendingUpdates.value.length) return;
+  // --- Восстановление очереди обновлений из localStorage ---
+  pendingUpdates.value = getStoredUpdates();
+  updatesStatus.value = localStorage.getItem('updatesStatus') || 'idle';
 
-    const actionsToSend = [...pendingUpdates.value];
-    pendingUpdates.value = [];
+  const lastUpdatesSentTime = Number(localStorage.getItem('lastUpdatesSentTime') || 0);
+  const updatesElapsed = Date.now() - lastUpdatesSentTime;
 
-    try {
-      await axios.post(`${API_URL}/items/update-batch`, { actions: actionsToSend });
-    } catch (error) {
-      // При ошибке возвращаем действия обратно в очередь
-      pendingUpdates.value.unshift(...actionsToSend);
+  if (pendingUpdates.value.length > 0) {
+    if (updatesElapsed < UPDATES_INTERVAL) {
+      // Секунда не истекла — доигрываем оставшееся
+      updatesStatus.value = 'pending';
+      scheduleUpdates(UPDATES_INTERVAL - updatesElapsed);
+    } else {
+      // Окно уже прошло — отправляем сразу
+      sendUpdates();
     }
-  }, 1000);
+  }
 
   // --- Первичная загрузка ---
   fetchUnselected();
@@ -201,7 +262,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  clearInterval(updatesInterval);
+  if (window._updatesTimeout) {
+    clearTimeout(window._updatesTimeout);
+    window._updatesTimeout = null;
+  }
   if (window._batchTimeout) {
     clearTimeout(window._batchTimeout);
     window._batchTimeout = null;
