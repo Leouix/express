@@ -113,11 +113,18 @@ export const useIdsStore = defineStore('ids', {
         // Сервер — авторитетный источник: он знает все 1 000 000 + добавленные ID.
         // Дубликаты, не замеченные клиентской проверкой, возвращаются сюда.
         const duplicates = data.duplicates || [];
+        const added = data.added || [];
+
         this.batchResult = {
-          added: data.added || [],
+          added,
           duplicates,
         };
         this.scheduleBatchResultClear();
+
+        // Добавляем подтверждённые сервером ID в колонку
+        if (added.length) {
+          this.unselected.push(...added);
+        }
 
         // Откатываем оптимистичное UI-обновление: дубликаты добавлялись в список
         // в addNewId() до подтверждения сервера — теперь их нужно убрать.
@@ -180,10 +187,6 @@ export const useIdsStore = defineStore('ids', {
       setStoredQueue(currentQueue);
       this.pendingAdditions = currentQueue;
 
-      // Оптимистичное обновление UI слева
-      if (String(numId).includes(this.searchLeft)) {
-        this.unselected.unshift(numId);
-      }
       this.newManualId = '';
 
       // 2. Проверяем время последней отправки (10-сек окно)
