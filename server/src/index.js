@@ -10,7 +10,7 @@ app.use(cors());
 // ==========================================
 let unselectedIds = Array.from({ length: 1000000 }, (_, i) => i + 1);
 let selectedIds = [];
-const allIdsSet = new Set(unselectedIds);
+let allIdsSet = new Set(unselectedIds);
 
 // ==========================================
 // 2. ПРОСТАЯ ОЧЕРЕДЬ ЗАПРОСОВ (QUEUE)
@@ -179,7 +179,7 @@ app.post('/api/reset', async (req, res) => {
     selectedIds = [];
     allIdsSet = new Set(unselectedIds);
     console.log('Состояние сброшено к начальному (1 000 000 ID в левом окне)');
-    return { reset: true, unselectedCount: unselectedIds.length, selectedCount: selectedIds.length };
+    return Promise.resolve({ reset: true, unselectedCount: unselectedIds.length, selectedCount: selectedIds.length });
   }).then((result) => {
     res.json({ success: true, ...result });
   });

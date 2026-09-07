@@ -2,27 +2,26 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import draggable from 'vuedraggable';
+import { useAppStore } from './stores/app';
 import { useIdsStore } from './stores/ids';
+import { useAdditionsStore } from './stores/additions';
+import { useUpdatesStore } from './stores/updates';
 import { useInfiniteScroll } from './composables/useInfiniteScroll';
 
+const appStore = useAppStore();
 const store = useIdsStore();
+const additionsStore = useAdditionsStore();
+const updatesStore = useUpdatesStore();
 
-const {
-  unselected,
-  selected,
-  searchLeft,
-  searchRight,
-  newManualId,
-  pendingAdditions,
-  pendingUpdates,
-  batchResult,
-} = storeToRefs(store);
+const { unselected, selected, searchLeft, searchRight } = storeToRefs(store);
+const { newManualId, pendingAdditions, batchResult } = storeToRefs(additionsStore);
+const { pendingUpdates } = storeToRefs(updatesStore);
 
 const leftList = ref(null);
 const rightList = ref(null);
 
-onMounted(() => store.init());
-onUnmounted(() => store.dispose());
+onMounted(() => appStore.init());
+onUnmounted(() => appStore.dispose());
 
 useInfiniteScroll(leftList, () => store.loadMoreLeft(), { intervalMs: 2000 });
 useInfiniteScroll(rightList, () => store.loadMoreRight(), { intervalMs: 2000 });
@@ -34,7 +33,7 @@ useInfiniteScroll(rightList, () => store.loadMoreRight(), { intervalMs: 2000 });
     <!-- Блок добавления новых элементов -->
     <div class="add-bar">
       <input v-model="newManualId" type="number" placeholder="Введите новый ID" />
-      <button @click="store.addNewId">Добавить в очередь</button>
+      <button @click="additionsStore.addNewId">Добавить в очередь</button>
       <span class="status" v-if="pendingAdditions.length">В очереди на добавление: {{ pendingAdditions.length }}</span>
       <span class="status success" v-if="batchResult && batchResult.added.length">
         Добавлено: {{ batchResult.added.length }}
@@ -43,7 +42,7 @@ useInfiniteScroll(rightList, () => store.loadMoreRight(), { intervalMs: 2000 });
         Дубликаты отклонены ({{ batchResult.duplicates.length }}): {{ batchResult.duplicates.join(', ') }}
       </span>
       <span class="status" v-if="pendingUpdates.length">Синхронизация сортировки...</span>
-      <button class="reset-btn" @click="store.resetAll">Сбросить данные</button>
+      <button class="reset-btn" @click="appStore.resetAll">Сбросить данные</button>
     </div>
 
     <div class="panes">
@@ -51,7 +50,6 @@ useInfiniteScroll(rightList, () => store.loadMoreRight(), { intervalMs: 2000 });
       <div class="pane">
         <h3>Доступные ({{ unselected.length }} загружено)</h3>
         <input v-model="searchLeft" @input="store.onSearchLeft" placeholder="Поиск по ID..." class="search-input" />
-        
         <div class="list-container" ref="leftList">
           <div 
             v-for="id in unselected" 
