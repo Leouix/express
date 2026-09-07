@@ -205,6 +205,42 @@ export const useIdsStore = defineStore('ids', {
     // ==========================================
     // 1.2 БАТЧИНГ «ОБНОВЛЕНИЙ» (localStorage + 1-сек окно)
     // ==========================================
+    // ==========================================
+    // 1.3 СБРОС СОСТОЯНИЯ НА СЕРВЕРЕ
+    // ==========================================
+    async resetAll() {
+      try {
+        await axios.post(`${API_URL}/reset`);
+      } catch (error) {
+        console.error('Ошибка сброса состояния:', error);
+        return;
+      }
+
+      // Чистим локальные очереди и статусы (переживают перезагрузку страницы)
+      setStoredQueue([]);
+      setStoredUpdates([]);
+      localStorage.setItem('batchStatus', 'empty');
+      localStorage.setItem('updatesStatus', 'idle');
+      this.batchStatus = 'empty';
+      this.updatesStatus = 'idle';
+      this.pendingAdditions = [];
+      this.pendingUpdates = [];
+      this.batchResult = null;
+      this.newManualId = '';
+
+      // Сбрасываем пагинацию и перезагружаем оба списка
+      this.searchLeft = '';
+      this.searchRight = '';
+      this.pageLeft = 1;
+      this.pageRight = 1;
+      this.hasMoreLeft = true;
+      this.hasMoreRight = true;
+      this.unselected = [];
+      this.selected = [];
+      this.fetchUnselected();
+      this.fetchSelected();
+    },
+
     async sendUpdates() {
       const actions = getStoredUpdates();
       if (!actions.length) {

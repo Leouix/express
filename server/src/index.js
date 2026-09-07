@@ -172,6 +172,19 @@ app.post('/api/items/update-batch', async (req, res) => {
     res.json({ success: true });
 });
 
+// POST: Полный сброс состояния (для кнопки в интерфейсе)
+app.post('/api/reset', async (req, res) => {
+  await stateQueue.add(() => {
+    unselectedIds = Array.from({ length: 1000000 }, (_, i) => i + 1);
+    selectedIds = [];
+    allIdsSet = new Set(unselectedIds);
+    console.log('Состояние сброшено к начальному (1 000 000 ID в левом окне)');
+    return { reset: true, unselectedCount: unselectedIds.length, selectedCount: selectedIds.length };
+  }).then((result) => {
+    res.json({ success: true, ...result });
+  });
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

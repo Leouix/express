@@ -43,6 +43,7 @@ useInfiniteScroll(rightList, () => store.loadMoreRight(), { intervalMs: 2000 });
         Дубликаты отклонены ({{ batchResult.duplicates.length }}): {{ batchResult.duplicates.join(', ') }}
       </span>
       <span class="status" v-if="pendingUpdates.length">Синхронизация сортировки...</span>
+      <button class="reset-btn" @click="store.resetAll">Сбросить данные</button>
     </div>
 
     <div class="panes">
@@ -99,6 +100,8 @@ useInfiniteScroll(rightList, () => store.loadMoreRight(), { intervalMs: 2000 });
 .status { color: #666; font-size: 0.9em; }
 .status.success { color: #2e7d32; }
 .status.warn { color: #c62828; }
+.reset-btn { margin-left: auto; padding: 6px 12px; border: 1px solid #c62828; border-radius: 6px; background: #fff; color: #c62828; cursor: pointer; }
+.reset-btn:hover { background: #c62828; color: #fff; }
 .panes { display: flex; gap: 20px; flex: 1; min-height: 0; }
 .pane { flex: 1; border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fafafa; display: flex; flex-direction: column; min-height: 0; }
 .search-input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
