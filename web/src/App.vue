@@ -41,6 +41,7 @@ useInfiniteScroll(rightList, () => { store.loadMoreRight(); }, { intervalMs: 200
       <span class="status warn" v-if="batchResult && batchResult.duplicates.length">
         Дубликаты отклонены ({{ batchResult.duplicates.length }}): {{ batchResult.duplicates.join(', ') }}
       </span>
+      <span class="status warn" v-if="additionsStore.inputError">{{ additionsStore.inputError }}</span>
       <span class="status" v-if="pendingUpdates.length">Синхронизация сортировки...</span>
       <button class="reset-btn" @click="appStore.resetAll">Сбросить данные</button>
     </div>

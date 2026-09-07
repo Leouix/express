@@ -120,13 +120,17 @@ app.post('/api/items/add-batch', async (req: Request, res: Response) => {
             const duplicates: number[] = [];
 
             for (const id of newIds) {
-                const numId = Number(id);
+                // Защитный контур: невалидные (в т.ч. длиннее 15 цифр) ID не попадают в хранилище
+                const idStr = String(id);
+                if (!/^\d{1,15}$/.test(idStr)) continue;
+
+                const numId = Number(idStr);
                 // Дедупликация: проверяем, нет ли уже такого ID за O(1)
-                if (!isNaN(numId) && !allIdsSet.has(numId)) {
+                if (!allIdsSet.has(numId)) {
                     allIdsSet.add(numId);
                     unselectedIds.push(numId); // Добавляем в конец левого списка
                     added.push(numId);
-                } else if (!isNaN(numId)) {
+                } else {
                     duplicates.push(numId);
                 }
             }

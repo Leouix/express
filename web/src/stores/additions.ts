@@ -4,10 +4,12 @@ import type { AddBatchResponse, AddBatchResult } from '../types';
 import { useIdsStore } from './ids';
 
 const BATCH_INTERVAL = 10000; // 10 секунд (добавления)
+const MAX_ID_LENGTH = 15; // 2^53-1 => максимум 15 цифр (без потери точности в number)
 
 // --- Таймеры (module-scope, а не window.*): не протекают в глобальный объект ---
 let batchTimeout: ReturnType<typeof setTimeout> | null = null;
 let batchResultTimeout: ReturnType<typeof setTimeout> | null = null;
+let errorTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // --- Хелперы localStorage ---
 const getStoredQueue = (): number[] => JSON.parse(localStorage.getItem('pendingAdditions') || '[]');
@@ -26,6 +28,9 @@ export const useAdditionsStore = defineStore('additions', {
     // -- Результат последней отправки батча (для обратной связи с сервером) --
     // { added: [...], duplicates: [...] } или null, если батч ещё не отправлялся
     batchResult: null as AddBatchResult | null,
+
+    // -- Ошибка валидации ввода (чистится через 5 сек) --
+    inputError: '',
   }),
 
   getters: {
@@ -103,8 +108,24 @@ export const useAdditionsStore = defineStore('additions', {
     },
 
     addNewId() {
-      if (!this.newManualId) return;
-      const numId = Number(this.newManualId);
+      const raw = this.newManualId.trim();
+      if (!raw) return;
+
+      // Валидация ДО конвертации: числа больше 15 цифр теряют точность в number
+      if (!/^\d{1,15}$/.test(raw)) {
+        this.inputError = `Максимум ${MAX_ID_LENGTH} цифр`;
+        if (errorTimeout) {
+          clearTimeout(errorTimeout);
+        }
+        errorTimeout = setTimeout(() => {
+          errorTimeout = null;
+          this.inputError = '';
+        }, 5000);
+        this.newManualId = '';
+        return;
+      }
+
+      const numId = Number(raw);
 
       const idsStore = useIdsStore();
 
@@ -167,6 +188,7 @@ export const useAdditionsStore = defineStore('additions', {
     },
 
     clear() {
+      this.inputError = '';
       setStoredQueue([]);
       this.pendingAdditions = [];
       localStorage.setItem('batchStatus', 'empty');
@@ -176,6 +198,10 @@ export const useAdditionsStore = defineStore('additions', {
     },
 
     dispose() {
+      if (errorTimeout) {
+        clearTimeout(errorTimeout);
+        errorTimeout = null;
+      }
       if (batchResultTimeout) {
         clearTimeout(batchResultTimeout);
         batchResultTimeout = null;
