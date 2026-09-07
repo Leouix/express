@@ -1,0 +1,13 @@
+services:
+  server:
+    image: node:20-alpine
+    container_name: express-server
+    working_dir: /app
+    volumes:
+      - ./server:/app
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - PORT=3000
+    command: sh -c "npm install --no-audit --no-fund && npm run build && npm start"
+    restart: unless-stopped

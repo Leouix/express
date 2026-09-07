@@ -25,6 +25,11 @@ onUnmounted(() => appStore.dispose());
 
 useInfiniteScroll(leftList, () => { store.loadMoreLeft(); }, { intervalMs: 2000 });
 useInfiniteScroll(rightList, () => { store.loadMoreRight(); }, { intervalMs: 2000 });
+
+// Убираем нецифровые символы из поля ввода по одному (буква удаляется, цифры остаются)
+const filterManualId = () => {
+  additionsStore.newManualId = additionsStore.newManualId.replace(/\D/g, '').slice(0, 15);
+};
 </script>
 
 
@@ -32,7 +37,7 @@ useInfiniteScroll(rightList, () => { store.loadMoreRight(); }, { intervalMs: 200
   <div class="app-container">
     <!-- Блок добавления новых элементов -->
     <div class="add-bar">
-      <input v-model="newManualId" type="number" placeholder="Введите новый ID" />
+      <input v-model="newManualId" type="text" inputmode="numeric" maxlength="15" @input="filterManualId" placeholder="Введите новый ID (до 15 цифр)" />
       <button @click="additionsStore.addNewId">Добавить в очередь</button>
       <span class="status" v-if="additionsStore.batchStatus === 'pending'">В очереди на добавление: {{ pendingAdditions.length }}</span>
       <span class="status success" v-if="batchResult && batchResult.added.length">
