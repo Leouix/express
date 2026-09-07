@@ -1,35 +1,46 @@
-import { onMounted, onUnmounted, watch, nextTick } from 'vue';
+import { onMounted, onUnmounted } from 'vue';
 
-export function useInfiniteScroll(targetRef, onLoadMore, throttleMs = 1500) {
-  let observer = null;
-  let lastCall = 0;
+export function useInfiniteScroll(containerRef, onLoadMore, {
+  threshold = 50,
+  intervalMs = 2000,
+} = {}) {
+  let busy = false;
+  let timer = null;
 
-  const setupObserver = () => {
-    if (observer) {
-      observer.disconnect();
-      observer = null;
+  const check = () => {
+    const el = containerRef.value;
+    if (!el || busy) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    if (dist <= threshold) {
+      busy = true;
+      Promise.resolve(onLoadMore()).finally(() => {
+        busy = false;
+      });
     }
-    const el = targetRef.value;
-    if (!el) return;
-    observer = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && Date.now() - lastCall > throttleMs) {
-        lastCall = Date.now();
-        onLoadMore();
-      }
-    });
-    observer.observe(el);
+  };
+
+  const onScroll = () => check();
+
+  const startTimer = () => {
+    stopTimer();
+    timer = setInterval(check, intervalMs);
+  };
+
+  const stopTimer = () => {
+    if (timer) clearInterval(timer);
+    timer = null;
   };
 
   onMounted(() => {
-    setupObserver();
-    // Переустанавливаем observer, когда сентинел появляется/исчезает (v-if)
-    watch(targetRef, async () => {
-      await nextTick();
-      setupObserver();
-    });
+    check();
+    const el = containerRef.value;
+    if (el) el.addEventListener('scroll', onScroll, { passive: true });
+    startTimer();
   });
 
   onUnmounted(() => {
-    if (observer) observer.disconnect();
+    stopTimer();
+    const el = containerRef.value;
+    if (el) el.removeEventListener('scroll', onScroll);
   });
 }

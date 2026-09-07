@@ -16,20 +16,16 @@ const {
   pendingAdditions,
   pendingUpdates,
   batchResult,
-  isLoadingLeft,
-  isLoadingRight,
-  hasMoreLeft,
-  hasMoreRight,
 } = storeToRefs(store);
 
-const leftObserver = ref(null);
-const rightObserver = ref(null);
+const leftList = ref(null);
+const rightList = ref(null);
 
 onMounted(() => store.init());
 onUnmounted(() => store.dispose());
 
-useInfiniteScroll(leftObserver, () => store.loadMoreLeft());
-useInfiniteScroll(rightObserver, () => store.loadMoreRight());
+useInfiniteScroll(leftList, () => store.loadMoreLeft(), { intervalMs: 2000 });
+useInfiniteScroll(rightList, () => store.loadMoreRight(), { intervalMs: 2000 });
 </script>
 
 
@@ -55,7 +51,7 @@ useInfiniteScroll(rightObserver, () => store.loadMoreRight());
         <h3>Доступные ({{ unselected.length }} загружено)</h3>
         <input v-model="searchLeft" @input="store.onSearchLeft" placeholder="Поиск по ID..." class="search-input" />
         
-        <div class="list-container">
+        <div class="list-container" ref="leftList">
           <div 
             v-for="id in unselected" 
             :key="'u-' + id" 
@@ -64,8 +60,6 @@ useInfiniteScroll(rightObserver, () => store.loadMoreRight());
           >
             {{ id }} <span class="action-icon">→</span>
           </div>
-          <!-- Сенсор для инфинити-скролла -->
-          <div v-if="isLoadingLeft || hasMoreLeft" ref="leftObserver" class="observer">Загрузка...</div>
         </div>
       </div>
 
@@ -74,7 +68,7 @@ useInfiniteScroll(rightObserver, () => store.loadMoreRight());
         <h3>Выбранные (Drag&Drop)</h3>
         <input v-model="searchRight" @input="store.onSearchRight" placeholder="Поиск по ID..." class="search-input" />
         
-        <div class="list-container">
+        <div class="list-container" ref="rightList">
           <!-- 
              vuedraggable сам обновляет массив selected при перетаскивании. 
              @end срабатывает, когда мы отпустили элемент.
@@ -91,9 +85,6 @@ useInfiniteScroll(rightObserver, () => store.loadMoreRight());
               </div>
             </template>
           </draggable>
-          
-          <!-- Сенсор для инфинити-скролла -->
-          <div v-if="isLoadingRight || hasMoreRight" ref="rightObserver" class="observer">Загрузка...</div>
         </div>
       </div>
     </div>
@@ -103,19 +94,18 @@ useInfiniteScroll(rightObserver, () => store.loadMoreRight());
 
 <style scoped>
 /* Базовые стили для наглядности */
-.app-container { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }
+.app-container { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; }
 .add-bar { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
 .status { color: #666; font-size: 0.9em; }
 .status.success { color: #2e7d32; }
 .status.warn { color: #c62828; }
-.panes { display: flex; gap: 20px; }
-.pane { flex: 1; border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fafafa; }
+.panes { display: flex; gap: 20px; flex: 1; min-height: 0; }
+.pane { flex: 1; border: 1px solid #ccc; border-radius: 8px; padding: 10px; background: #fafafa; display: flex; flex-direction: column; min-height: 0; }
 .search-input { width: 100%; padding: 8px; margin-bottom: 10px; box-sizing: border-box; }
-.list-container { height: 400px; overflow-y: auto; border: 1px solid #eee; background: #fff; }
+.list-container { flex: 1; overflow-y: auto; border: 1px solid #eee; background: #fff; min-height: 0; }
 .list-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; }
 .list-item:hover { background: #f0f8ff; }
 .selected-item { background: #e6ffe6; }
 .selected-item:hover { background: #ccffcc; }
 .drag-area { min-height: 100%; }
-.observer { padding: 10px; text-align: center; color: #888; font-size: 0.9em; }
 </style>

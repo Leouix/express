@@ -354,13 +354,13 @@ export const useIdsStore = defineStore('ids', {
 
     // ==== ЗАГРУЗКА СЛЕДУЮЩЕЙ СТРАНИЦЫ (для инфинити-скролла) ====
     loadMoreLeft() {
-      if (!this.isLoadingLeft && !this.hasMoreLeft) return;
+      if (this.isLoadingLeft || !this.hasMoreLeft) return;
       this.pageLeft++;
       return this.fetchUnselected(false);
     },
 
     loadMoreRight() {
-      if (!this.isLoadingRight && !this.hasMoreRight) return;
+      if (this.isLoadingRight || !this.hasMoreRight) return;
       this.pageRight++;
       return this.fetchSelected(false);
     },
