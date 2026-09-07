@@ -148,7 +148,9 @@ export const useIdsStore = defineStore('ids', {
         this.unselected.includes(numId) ||
         this.selected.includes(numId)
       ) {
-        alert('Id уже в списке');
+        // Вместо alert — единое инлайн-сообщение «Дубликаты отклонены», автоскрытие 5 сек
+        this.batchResult = { added: [], duplicates: [numId] };
+        this.scheduleBatchResultClear();
         this.newManualId = '';
         return;
       }
