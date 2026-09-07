@@ -124,13 +124,17 @@ export const useIdsStore = defineStore('ids', {
     // Добавляет подтверждённые сервером ID в невыбранную колонку
     appendUnselected(ids) {
       this.unselected.push(...ids);
+      // Держим массив отсортированным: бинарный поиск в unselectItem
+      // предполагает отсортированную последовательность.
+      this.unselected.sort((a, b) => a - b);
     },
 
-    // Убирает дубликаты из обеих колонок после ответа сервера
+    // Убирает дубликаты из левой колонки после ответа сервера.
+    // Никогда не трогаем selected: ID мог быть перемещён в правое окно
+    // до того, как сервер подтвердил дубликат добавления.
     removeIds(ids) {
       const dupSet = new Set(ids.map(Number));
       this.unselected = this.unselected.filter(id => !dupSet.has(id));
-      this.selected = this.selected.filter(id => !dupSet.has(id));
     },
 
     // Сбрасывает пагинацию и состояние списков (используется при resetAll)

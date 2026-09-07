@@ -101,6 +101,11 @@ app.post('/api/items/add-batch', async (req, res) => {
                 duplicates.push(numId);
             }
         }
+        // Новые ID добавляются в конец массива: сортируем, чтобы не сломать
+        // бинарный поиск в UNSELECT (он требует отсортированный массив).
+        if (added.length) {
+            unselectedIds.sort((a, b) => a - b);
+        }
         console.log(`Добавлено новых уникальных ID: ${added.length}, дубликатов: ${duplicates.length}`);
         return { added, duplicates };
     }).then((result) => {
@@ -116,60 +121,65 @@ app.post('/api/items/update-batch', async (req, res) => {
 
     if (!Array.isArray(actions)) return res.status(400).send('Invalid data');
 
-    await stateQueue.add(async () => {
-        // Пересоздаём Set'ы заново перед обработкой батча:
-        // проверки наличия через Set работают за O(1), а не за O(n) как Array.includes
-        const selectedSet = new Set(selectedIds);
-        const unselectedSet = new Set(unselectedIds);
+    try {
+        await stateQueue.add(async () => {
+            // Пересоздаём Set'ы заново перед обработкой батча:
+            // проверки наличия через Set работают за O(1), а не за O(n) как Array.includes
+            const selectedSet = new Set(selectedIds);
+            const unselectedSet = new Set(unselectedIds);
 
-        for (const action of actions) {
-            if (action.type === 'SELECT') {
-                // Перенос из левого в правое
-                unselectedIds = unselectedIds.filter(id => id !== action.id);
-                unselectedSet.delete(action.id);
-                if (!selectedSet.has(action.id)) {
-                    selectedIds.push(action.id);
-                    selectedSet.add(action.id);
-                }
-            } 
-            else if (action.type === 'UNSELECT') {
-                // Возврат в левое окно
-                selectedIds = selectedIds.filter(id => id !== action.id);
-                selectedSet.delete(action.id);
-                if (!unselectedSet.has(action.id)) {
-                    let lo = 0, hi = unselectedIds.length;
-                    while (lo < hi) {
-                        const mid = (lo + hi) >>> 1;
-                        if (unselectedIds[mid] < action.id) lo = mid + 1;
-                        else hi = mid;
+            for (const action of actions) {
+                if (action.type === 'SELECT') {
+                    // Перенос из левого в правое
+                    unselectedIds = unselectedIds.filter(id => id !== action.id);
+                    unselectedSet.delete(action.id);
+                    if (!selectedSet.has(action.id)) {
+                        selectedIds.push(action.id);
+                        selectedSet.add(action.id);
                     }
-                    unselectedIds.splice(lo, 0, action.id);
-                    unselectedSet.add(action.id);
+                } 
+                else if (action.type === 'UNSELECT') {
+                    // Возврат в левое окно
+                    selectedIds = selectedIds.filter(id => id !== action.id);
+                    selectedSet.delete(action.id);
+                    if (!unselectedSet.has(action.id)) {
+                        let lo = 0, hi = unselectedIds.length;
+                        while (lo < hi) {
+                            const mid = (lo + hi) >>> 1;
+                            if (unselectedIds[mid] < action.id) lo = mid + 1;
+                            else hi = mid;
+                        }
+                        unselectedIds.splice(lo, 0, action.id);
+                        unselectedSet.add(action.id);
+                    }
+                }
+                else if (action.type === 'MOVE' && action.beforeId) {
+                    // Логика Drag & Drop сортировки в правом окне
+                    const currentIndex = selectedIds.indexOf(action.id);
+                    if (currentIndex === -1) continue;
+                    
+                    // Удаляем элемент с текущей позиции
+                    selectedIds.splice(currentIndex, 1);
+                    
+                    // Находим индекс элемента, ПЕРЕД которым нужно вставить
+                    const targetIndex = selectedIds.indexOf(action.beforeId);
+                    
+                    // Если targetIndex -1 (элемент beforeId не найден), ставим в конец
+                    if (targetIndex === -1) {
+                        selectedIds.push(action.id);
+                    } else {
+                        // Вставляем на нужную позицию
+                        selectedIds.splice(targetIndex, 0, action.id);
+                    }
                 }
             }
-            else if (action.type === 'MOVE' && action.beforeId) {
-                // Логика Drag & Drop сортировки в правом окне
-                const currentIndex = selectedIds.indexOf(action.id);
-                if (currentIndex === -1) continue;
-                
-                // Удаляем элемент с текущей позиции
-                selectedIds.splice(currentIndex, 1);
-                
-                // Находим индекс элемента, ПЕРЕД которым нужно вставить
-                const targetIndex = selectedIds.indexOf(action.beforeId);
-                
-                // Если targetIndex -1 (элемент beforeId не найден), ставим в конец
-                if (targetIndex === -1) {
-                    selectedIds.push(action.id);
-                } else {
-                    // Вставляем на нужную позицию
-                    selectedIds.splice(targetIndex, 0, action.id);
-                }
-            }
-        }
-    });
+        });
 
     res.json({ success: true });
+} catch (error) {
+    console.error('Ошибка обработки update-batch:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+}
 });
 
 // POST: Полный сброс состояния (для кнопки в интерфейсе)
