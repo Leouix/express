@@ -1,11 +1,18 @@
 import { onMounted, onUnmounted } from 'vue';
+import type { Ref } from 'vue';
 
-export function useInfiniteScroll(containerRef, onLoadMore, {
-  threshold = 50,
-  intervalMs = 2000,
-} = {}) {
+interface InfiniteScrollOptions {
+  threshold?: number;
+  intervalMs?: number;
+}
+
+export function useInfiniteScroll(
+  containerRef: Ref<HTMLElement | null>,
+  onLoadMore: () => void | Promise<void>,
+  { threshold = 50, intervalMs = 2000 }: InfiniteScrollOptions = {},
+) {
   let busy = false;
-  let timer = null;
+  let timer: ReturnType<typeof setInterval> | null = null;
 
   const check = () => {
     const el = containerRef.value;

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { storeToRefs } from 'pinia';
 import draggable from 'vuedraggable';
@@ -17,14 +17,14 @@ const { unselected, selected, searchLeft, searchRight } = storeToRefs(store);
 const { newManualId, pendingAdditions, batchResult } = storeToRefs(additionsStore);
 const { pendingUpdates } = storeToRefs(updatesStore);
 
-const leftList = ref(null);
-const rightList = ref(null);
+const leftList = ref<HTMLElement | null>(null);
+const rightList = ref<HTMLElement | null>(null);
 
 onMounted(() => appStore.init());
 onUnmounted(() => appStore.dispose());
 
-useInfiniteScroll(leftList, () => store.loadMoreLeft(), { intervalMs: 2000 });
-useInfiniteScroll(rightList, () => store.loadMoreRight(), { intervalMs: 2000 });
+useInfiniteScroll(leftList, () => { store.loadMoreLeft(); }, { intervalMs: 2000 });
+useInfiniteScroll(rightList, () => { store.loadMoreRight(); }, { intervalMs: 2000 });
 </script>
 
 

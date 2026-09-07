@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia';
 import { api } from './api';
+import type { PaginatedResponse, UpdateAction } from '../types';
 import { useUpdatesStore } from './updates';
 
 export const useIdsStore = defineStore('ids', {
   state: () => ({
-    unselected: [],
-    selected: [],
+    unselected: [] as number[],
+    selected: [] as number[],
 
     isLoadingLeft: false,
     isLoadingRight: false,
@@ -30,7 +31,7 @@ export const useIdsStore = defineStore('ids', {
 
       this.isLoadingLeft = true;
       try {
-        const { data } = await api.get('/unselected', {
+        const { data } = await api.get<PaginatedResponse>('/unselected', {
           params: { search: this.searchLeft, page: this.pageLeft, limit: 20 }
         });
         this.unselected.push(...data.data);
@@ -46,7 +47,7 @@ export const useIdsStore = defineStore('ids', {
 
       this.isLoadingRight = true;
       try {
-        const { data } = await api.get('/selected', {
+        const { data } = await api.get<PaginatedResponse>('/selected', {
           params: { search: this.searchRight, page: this.pageRight, limit: 20 }
         });
         this.selected.push(...data.data);
@@ -83,7 +84,7 @@ export const useIdsStore = defineStore('ids', {
     // ==========================================
     // 3. ДЕЙСТВИЯ ЮЗЕРА (списки + очередь обновлений)
     // ==========================================
-    selectItem(id) {
+    selectItem(id: number) {
       // Оптимистичное UI-обновление
       this.unselected = this.unselected.filter(item => item !== id);
       this.selected.push(id);
@@ -92,7 +93,7 @@ export const useIdsStore = defineStore('ids', {
       useUpdatesStore().enqueueUpdate({ type: 'SELECT', id });
     },
 
-    unselectItem(id) {
+    unselectItem(id: number) {
       this.selected = this.selected.filter(item => item !== id);
       let lo = 0, hi = this.unselected.length;
       while (lo < hi) {
@@ -106,7 +107,7 @@ export const useIdsStore = defineStore('ids', {
     },
 
     // Срабатывает, когда отпустили мышку после перетаскивания
-    onDragEnd(event) {
+    onDragEnd(event: { newIndex: number }) {
       const newIndex = event.newIndex;
       // Массив selected УЖЕ обновлён vuedraggable на момент вызова @end
       const movedId = this.selected[newIndex];
@@ -114,7 +115,8 @@ export const useIdsStore = defineStore('ids', {
       // Элемент, который теперь стоит ПОСЛЕ перетащенного
       const beforeId = newIndex + 1 < this.selected.length ? this.selected[newIndex + 1] : null;
 
-      useUpdatesStore().enqueueUpdate({ type: 'MOVE', id: movedId, beforeId });
+      const action: UpdateAction = { type: 'MOVE', id: movedId, beforeId };
+      useUpdatesStore().enqueueUpdate(action);
     },
 
     // ==========================================
@@ -122,7 +124,7 @@ export const useIdsStore = defineStore('ids', {
     // ==========================================
 
     // Добавляет подтверждённые сервером ID в невыбранную колонку
-    appendUnselected(ids) {
+    appendUnselected(ids: number[]) {
       this.unselected.push(...ids);
       // Держим массив отсортированным: бинарный поиск в unselectItem
       // предполагает отсортированную последовательность.
@@ -132,7 +134,7 @@ export const useIdsStore = defineStore('ids', {
     // Убирает дубликаты из левой колонки после ответа сервера.
     // Никогда не трогаем selected: ID мог быть перемещён в правое окно
     // до того, как сервер подтвердил дубликат добавления.
-    removeIds(ids) {
+    removeIds(ids: number[]) {
       const dupSet = new Set(ids.map(Number));
       this.unselected = this.unselected.filter(id => !dupSet.has(id));
     },
