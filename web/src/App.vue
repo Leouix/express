@@ -1,304 +1,30 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
+import { storeToRefs } from 'pinia';
 import draggable from 'vuedraggable';
-import axios from 'axios';
+import { useIdsStore } from './stores/ids';
+import { useInfiniteScroll } from './composables/useInfiniteScroll';
 
-const API_URL = 'http://localhost:3000/api';
+const store = useIdsStore();
 
-// --- Состояние данных ---
-const unselected = ref([]);
-const selected = ref([]);
+const {
+  unselected,
+  selected,
+  searchLeft,
+  searchRight,
+  newManualId,
+  pendingAdditions,
+  pendingUpdates,
+} = storeToRefs(store);
 
-const searchLeft = ref('');
-const searchRight = ref('');
-
-const pageLeft = ref(1);
-const pageRight = ref(1);
-
-const newManualId = ref('');
-
-// --- Очереди для батчинга ---
-const pendingAdditions = ref([]);
-const pendingUpdates = ref([]);
-
-// --- Статус/очередь добавлений: переживают перезагрузку страницы ---
-// Сам таймер (setTimeout) в localStorage сохранить нельзя — хранится lastSentTime,
-// а при onMounted по нему доигрывается оставшееся окно (или шлётся сразу).
-const batchStatus = ref(localStorage.getItem('batchStatus') || 'empty');
-const BATCH_INTERVAL = 10000; // 10 секунд
-
-const getStoredQueue = () => JSON.parse(localStorage.getItem('pendingAdditions') || '[]');
-const setStoredQueue = (queue) => localStorage.setItem('pendingAdditions', JSON.stringify(queue));
-
-// ==========================================
-// 1. ЗАПРОСЫ НА СЕРВЕР (ФЕТЧИНГ)
-// ==========================================
-const fetchUnselected = async (reset = false) => {
-  if (reset) { pageLeft.value = 1; unselected.value = []; }
-  
-  const { data } = await axios.get(`${API_URL}/unselected`, {
-    params: { search: searchLeft.value, page: pageLeft.value, limit: 20 }
-  });
-  unselected.value.push(...data.data);
-};
-
-const fetchSelected = async (reset = false) => {
-  if (reset) { pageRight.value = 1; selected.value = []; }
-  
-  const { data } = await axios.get(`${API_URL}/selected`, {
-    params: { search: searchRight.value, page: pageRight.value, limit: 20 }
-  });
-  selected.value.push(...data.data);
-};
-
-// ==========================================
-// 1.1 БАТЧИНГ «ДОБАВЛЕНИЙ» (localStorage + 10-сек окно)
-// ==========================================
-const sendBatch = async () => {
-  const queue = getStoredQueue();
-  if (!queue.length) {
-    pendingAdditions.value = [];
-    localStorage.setItem('batchStatus', 'empty');
-    batchStatus.value = 'empty';
-    return;
-  }
-
-  try {
-    await axios.post(`${API_URL}/items/add-batch`, { newIds: queue });
-
-    // Успешно отправлено: очищаем очередь, фиксируем время и статус
-    setStoredQueue([]);
-    pendingAdditions.value = [];
-    localStorage.setItem('lastSentTime', Date.now().toString());
-    localStorage.setItem('batchStatus', 'empty');
-    batchStatus.value = 'empty';
-  } catch (error) {
-    console.error('Ошибка отправки батча:', error);
-    // Очередь остаётся в localStorage — повтор отправится при следующем addNewId/перезагрузке
-  }
-};
-
-// Планирует sendBatch через delay мс (чистит предыдущий таймер)
-const scheduleBatch = (delay) => {
-  if (window._batchTimeout) {
-    clearTimeout(window._batchTimeout);
-  }
-  window._batchTimeout = setTimeout(async () => {
-    window._batchTimeout = null;
-    await sendBatch();
-  }, delay);
-};
-
-// ==========================================
-// 1.2 БАТЧИНГ «ОБНОВЛЕНИЙ» (localStorage + 1-сек окно)
-// ==========================================
-const UPDATES_INTERVAL = 1000; // 1 секунда
-const updatesStatus = ref(localStorage.getItem('updatesStatus') || 'idle');
-
-const getStoredUpdates = () => JSON.parse(localStorage.getItem('pendingUpdates') || '[]');
-const setStoredUpdates = (actions) => {
-  localStorage.setItem('pendingUpdates', JSON.stringify(actions));
-  pendingUpdates.value = actions;
-};
-
-const sendUpdates = async () => {
-  const actions = getStoredUpdates();
-  if (!actions.length) {
-    updatesStatus.value = 'idle';
-    localStorage.setItem('updatesStatus', 'idle');
-    return;
-  }
-
-  try {
-    await axios.post(`${API_URL}/items/update-batch`, { actions });
-
-    setStoredUpdates([]);
-    localStorage.setItem('lastUpdatesSentTime', Date.now().toString());
-    updatesStatus.value = 'idle';
-    localStorage.setItem('updatesStatus', 'idle');
-  } catch (error) {
-    console.error('Ошибка отправки обновлений:', error);
-    // Очередь остаётся в localStorage — повтор отправится при следующем действии/перезагрузке
-  }
-};
-
-// Таймер на оставшуюся часть окна; повторными кликами deadline не сдвигаем
-const scheduleUpdates = (delay) => {
-  if (window._updatesTimeout) return;
-  window._updatesTimeout = setTimeout(async () => {
-    window._updatesTimeout = null;
-    await sendUpdates();
-  }, delay);
-};
-
-// Добавляет действие в очередь и решает: отправить сразу или копить до конца окна
-const enqueueUpdate = (action) => {
-  const queue = getStoredUpdates();
-  queue.push(action);
-  setStoredUpdates(queue);
-
-  const lastSentTime = Number(localStorage.getItem('lastUpdatesSentTime') || 0);
-  const elapsed = Date.now() - lastSentTime;
-
-  if (elapsed < UPDATES_INTERVAL) {
-    updatesStatus.value = 'pending';
-    localStorage.setItem('updatesStatus', 'pending');
-    scheduleUpdates(UPDATES_INTERVAL - elapsed);
-  } else {
-    sendUpdates(); // первый запрос — отправляем сразу, не ждём 1 секунду
-  }
-};
-
-// ==========================================
-// 2. ЛОГИКА ИНТЕРФЕЙСА (ДЕЙСТВИЯ ЮЗЕРА)
-// ==========================================
-const addNewId = () => {
-  if (!newManualId.value) return;
-  const numId = Number(newManualId.value);
-
-  // 1. Кладём в очередь и сохраняем в localStorage
-  const currentQueue = getStoredQueue();
-  currentQueue.push(numId);
-  setStoredQueue(currentQueue);
-  pendingAdditions.value = currentQueue;
-
-  // Оптимистичное обновление UI слева
-  if (String(numId).includes(searchLeft.value)) {
-    unselected.value.unshift(numId);
-  }
-  newManualId.value = '';
-
-  // 2. Проверяем время последней отправки (10-сек окно)
-  const lastSentTime = Number(localStorage.getItem('lastSentTime') || 0);
-  const elapsed = Date.now() - lastSentTime;
-
-  if (elapsed < BATCH_INTERVAL) {
-    localStorage.setItem('batchStatus', 'pending');
-    batchStatus.value = 'pending';
-    scheduleBatch(BATCH_INTERVAL - elapsed);
-  } else {
-    scheduleBatch(0); // окно истекло — отправляем сразу
-  }
-};
-
-const selectItem = (id) => {
-  // Оптимистичное UI-обновление
-  unselected.value = unselected.value.filter(item => item !== id);
-  selected.value.push(id);
-
-  // Кладём в очередь
-  enqueueUpdate({ type: 'SELECT', id });
-};
-
-const unselectItem = (id) => {
-  selected.value = selected.value.filter(item => item !== id);
-  unselected.value.push(id);
-
-  enqueueUpdate({ type: 'UNSELECT', id });
-};
-
-// Срабатывает, когда отпустили мышку после перетаскивания
-const onDragEnd = (event) => {
-  const newIndex = event.newIndex;
-  // Массив selected УЖЕ обновлён vuedraggable на момент вызова @end
-  const movedId = selected.value[newIndex];
-
-  // Элемент, который теперь стоит ПОСЛЕ перетащенного
-  const beforeId = newIndex + 1 < selected.value.length ? selected.value[newIndex + 1] : null;
-
-  enqueueUpdate({ type: 'MOVE', id: movedId, beforeId });
-};
-
-// ==========================================
-// 3. ЖИЗНЕННЫЙ ЦИКЛ
-// ==========================================
-onMounted(() => {
-  // --- Восстановление очереди добавлений из localStorage ---
-  pendingAdditions.value = getStoredQueue();
-
-  const lastSentTime = Number(localStorage.getItem('lastSentTime') || 0);
-  const elapsed = Date.now() - lastSentTime;
-  const queue = getStoredQueue();
-
-  if (queue.length > 0) {
-    if (elapsed < BATCH_INTERVAL) {
-      // Если время не истекло — доигрываем оставшееся до 10 сек
-      localStorage.setItem('batchStatus', 'pending');
-      batchStatus.value = 'pending';
-      scheduleBatch(BATCH_INTERVAL - elapsed);
-    } else {
-      // Если 10 секунд уже прошли — шлём сразу
-      sendBatch();
-    }
-  }
-
-  // --- Восстановление очереди обновлений из localStorage ---
-  pendingUpdates.value = getStoredUpdates();
-  updatesStatus.value = localStorage.getItem('updatesStatus') || 'idle';
-
-  const lastUpdatesSentTime = Number(localStorage.getItem('lastUpdatesSentTime') || 0);
-  const updatesElapsed = Date.now() - lastUpdatesSentTime;
-
-  if (pendingUpdates.value.length > 0) {
-    if (updatesElapsed < UPDATES_INTERVAL) {
-      // Секунда не истекла — доигрываем оставшееся
-      updatesStatus.value = 'pending';
-      scheduleUpdates(UPDATES_INTERVAL - updatesElapsed);
-    } else {
-      // Окно уже прошло — отправляем сразу
-      sendUpdates();
-    }
-  }
-
-  // --- Первичная загрузка ---
-  fetchUnselected();
-  fetchSelected();
-
-  // --- Подключаем обсерверы инфинити-скролла ---
-  setTimeout(() => {
-    setupIntersectionObserver(leftObserver, () => fetchUnselected(false), pageLeft);
-    setupIntersectionObserver(rightObserver, () => fetchSelected(false), pageRight);
-  }, 500);
-});
-
-onUnmounted(() => {
-  if (window._updatesTimeout) {
-    clearTimeout(window._updatesTimeout);
-    window._updatesTimeout = null;
-  }
-  if (window._batchTimeout) {
-    clearTimeout(window._batchTimeout);
-    window._batchTimeout = null;
-  }
-});
-
-// ==========================================
-// 4. ПОИСК И ИНФИНИТИ СКРОЛЛ
-// ==========================================
-let searchTimeout;
-const onSearchLeft = () => {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => fetchUnselected(true), 300); // Дебаунс 300мс
-};
-
-const onSearchRight = () => {
-  clearTimeout(searchTimeout);
-  searchTimeout = setTimeout(() => fetchSelected(true), 300);
-};
-
-// Настройка Intersection Observer для бесконечной прокрутки
 const leftObserver = ref(null);
 const rightObserver = ref(null);
 
-const setupIntersectionObserver = (targetRef, fetchCallback, pageRef) => {
-  const observer = new IntersectionObserver(entries => {
-    if (entries[0].isIntersecting) {
-      pageRef.value++;
-      fetchCallback();
-    }
-  });
-  if (targetRef.value) observer.observe(targetRef.value);
-};
+onMounted(() => store.init());
+onUnmounted(() => store.dispose());
+
+useInfiniteScroll(leftObserver, () => store.loadMoreLeft());
+useInfiniteScroll(rightObserver, () => store.loadMoreRight());
 </script>
 
 
@@ -307,7 +33,7 @@ const setupIntersectionObserver = (targetRef, fetchCallback, pageRef) => {
     <!-- Блок добавления новых элементов -->
     <div class="add-bar">
       <input v-model="newManualId" type="number" placeholder="Введите новый ID" />
-      <button @click="addNewId">Добавить в очередь</button>
+      <button @click="store.addNewId">Добавить в очередь</button>
       <span class="status" v-if="pendingAdditions.length">В очереди на добавление: {{ pendingAdditions.length }}</span>
       <span class="status" v-if="pendingUpdates.length">Синхронизация сортировки...</span>
     </div>
@@ -316,14 +42,14 @@ const setupIntersectionObserver = (targetRef, fetchCallback, pageRef) => {
       <!-- ================= ЛЕВОЕ ОКНО (Невыбранные) ================= -->
       <div class="pane">
         <h3>Доступные ({{ unselected.length }} загружено)</h3>
-        <input v-model="searchLeft" @input="onSearchLeft" placeholder="Поиск по ID..." class="search-input" />
+        <input v-model="searchLeft" @input="store.onSearchLeft" placeholder="Поиск по ID..." class="search-input" />
         
         <div class="list-container">
           <div 
             v-for="id in unselected" 
             :key="'u-' + id" 
             class="list-item"
-            @click="selectItem(id)"
+            @click="store.selectItem(id)"
           >
             {{ id }} <span class="action-icon">→</span>
           </div>
@@ -335,7 +61,7 @@ const setupIntersectionObserver = (targetRef, fetchCallback, pageRef) => {
       <!-- ================= ПРАВОЕ ОКНО (Выбранные + DnD) ================= -->
       <div class="pane">
         <h3>Выбранные (Drag&Drop)</h3>
-        <input v-model="searchRight" @input="onSearchRight" placeholder="Поиск по ID..." class="search-input" />
+        <input v-model="searchRight" @input="store.onSearchRight" placeholder="Поиск по ID..." class="search-input" />
         
         <div class="list-container">
           <!-- 
@@ -345,11 +71,11 @@ const setupIntersectionObserver = (targetRef, fetchCallback, pageRef) => {
           <draggable 
             v-model="selected" 
             :item-key="el => el"
-            @end="onDragEnd"
+            @end="store.onDragEnd"
             class="drag-area"
           >
             <template #item="{ element }">
-              <div class="list-item selected-item" @click="unselectItem(element)">
+              <div class="list-item selected-item" @click="store.unselectItem(element)">
                 <span class="action-icon">←</span> {{ element }}
               </div>
             </template>
