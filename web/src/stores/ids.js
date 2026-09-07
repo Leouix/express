@@ -246,7 +246,13 @@ export const useIdsStore = defineStore('ids', {
 
     unselectItem(id) {
       this.selected = this.selected.filter(item => item !== id);
-      this.unselected.push(id);
+      let lo = 0, hi = this.unselected.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >>> 1;
+        if (this.unselected[mid] < id) lo = mid + 1;
+        else hi = mid;
+      }
+      this.unselected.splice(lo, 0, id);
 
       this.enqueueUpdate({ type: 'UNSELECT', id });
     },
@@ -340,12 +346,12 @@ export const useIdsStore = defineStore('ids', {
     // ==========================================
     onSearchLeft() {
       clearTimeout(this._searchTimeout);
-      this._searchTimeout = setTimeout(() => this.fetchUnselected(true), 300); // Дебаунс 300мс
+      this._searchTimeout = setTimeout(() => this.fetchUnselected(true), 15000); // Дебаунс 300мс
     },
 
     onSearchRight() {
       clearTimeout(this._searchTimeout);
-      this._searchTimeout = setTimeout(() => this.fetchSelected(true), 300);
+      this._searchTimeout = setTimeout(() => this.fetchSelected(true), 15000);
     },
   },
 });

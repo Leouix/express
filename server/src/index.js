@@ -133,7 +133,13 @@ app.post('/api/items/update-batch', async (req, res) => {
                 selectedIds = selectedIds.filter(id => id !== action.id);
                 selectedSet.delete(action.id);
                 if (!unselectedSet.has(action.id)) {
-                    unselectedIds.push(action.id); 
+                    let lo = 0, hi = unselectedIds.length;
+                    while (lo < hi) {
+                        const mid = (lo + hi) >>> 1;
+                        if (unselectedIds[mid] < action.id) lo = mid + 1;
+                        else hi = mid;
+                    }
+                    unselectedIds.splice(lo, 0, action.id);
                     unselectedSet.add(action.id);
                 }
             }
