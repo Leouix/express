@@ -20,6 +20,9 @@ export const useIdsStore = defineStore('ids', {
     unselected: [],
     selected: [],
 
+    isLoadingLeft: false,
+    isLoadingRight: false,
+
     searchLeft: '',
     searchRight: '',
 
@@ -51,21 +54,33 @@ export const useIdsStore = defineStore('ids', {
     // 1. ЗАПРОСЫ НА СЕРВЕР (ФЕТЧИНГ)
     // ==========================================
     async fetchUnselected(reset = false) {
+      if (this.isLoadingLeft && !reset) return;
       if (reset) { this.pageLeft = 1; this.unselected = []; }
 
-      const { data } = await axios.get(`${API_URL}/unselected`, {
-        params: { search: this.searchLeft, page: this.pageLeft, limit: 20 }
-      });
-      this.unselected.push(...data.data);
+      this.isLoadingLeft = true;
+      try {
+        const { data } = await axios.get(`${API_URL}/unselected`, {
+          params: { search: this.searchLeft, page: this.pageLeft, limit: 20 }
+        });
+        this.unselected.push(...data.data);
+      } finally {
+        this.isLoadingLeft = false;
+      }
     },
 
     async fetchSelected(reset = false) {
+      if (this.isLoadingRight && !reset) return;
       if (reset) { this.pageRight = 1; this.selected = []; }
 
-      const { data } = await axios.get(`${API_URL}/selected`, {
-        params: { search: this.searchRight, page: this.pageRight, limit: 20 }
-      });
-      this.selected.push(...data.data);
+      this.isLoadingRight = true;
+      try {
+        const { data } = await axios.get(`${API_URL}/selected`, {
+          params: { search: this.searchRight, page: this.pageRight, limit: 20 }
+        });
+        this.selected.push(...data.data);
+      } finally {
+        this.isLoadingRight = false;
+      }
     },
 
     // ==========================================
@@ -328,6 +343,8 @@ export const useIdsStore = defineStore('ids', {
         clearTimeout(window._batchTimeout);
         window._batchTimeout = null;
       }
+      clearTimeout(this._searchTimeoutLeft);
+      clearTimeout(this._searchTimeoutRight);
     },
 
     // ==== ЗАГРУЗКА СЛЕДУЮЩЕЙ СТРАНИЦЫ (для инфинити-скролла) ====
@@ -345,13 +362,11 @@ export const useIdsStore = defineStore('ids', {
     // 4. ПОИСК И ИНФИНИТИ СКРОЛЛ
     // ==========================================
     onSearchLeft() {
-      clearTimeout(this._searchTimeout);
-      this._searchTimeout = setTimeout(() => this.fetchUnselected(true), 15000); // Дебаунс 300мс
+      this.fetchUnselected(true)
     },
 
     onSearchRight() {
-      clearTimeout(this._searchTimeout);
-      this._searchTimeout = setTimeout(() => this.fetchSelected(true), 15000);
+      this.fetchSelected(true)
     },
   },
 });
