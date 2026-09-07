@@ -16,6 +16,10 @@ const {
   pendingAdditions,
   pendingUpdates,
   batchResult,
+  isLoadingLeft,
+  isLoadingRight,
+  hasMoreLeft,
+  hasMoreRight,
 } = storeToRefs(store);
 
 const leftObserver = ref(null);
@@ -61,7 +65,7 @@ useInfiniteScroll(rightObserver, () => store.loadMoreRight());
             {{ id }} <span class="action-icon">→</span>
           </div>
           <!-- Сенсор для инфинити-скролла -->
-          <div ref="leftObserver" class="observer">Загрузка...</div>
+          <div v-if="isLoadingLeft || hasMoreLeft" ref="leftObserver" class="observer">Загрузка...</div>
         </div>
       </div>
 
@@ -89,7 +93,7 @@ useInfiniteScroll(rightObserver, () => store.loadMoreRight());
           </draggable>
           
           <!-- Сенсор для инфинити-скролла -->
-          <div ref="rightObserver" class="observer">Загрузка...</div>
+          <div v-if="isLoadingRight || hasMoreRight" ref="rightObserver" class="observer">Загрузка...</div>
         </div>
       </div>
     </div>

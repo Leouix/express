@@ -23,6 +23,9 @@ export const useIdsStore = defineStore('ids', {
     isLoadingLeft: false,
     isLoadingRight: false,
 
+    hasMoreLeft: true,
+    hasMoreRight: true,
+
     searchLeft: '',
     searchRight: '',
 
@@ -55,7 +58,7 @@ export const useIdsStore = defineStore('ids', {
     // ==========================================
     async fetchUnselected(reset = false) {
       if (this.isLoadingLeft && !reset) return;
-      if (reset) { this.pageLeft = 1; this.unselected = []; }
+      if (reset) { this.pageLeft = 1; this.unselected = []; this.hasMoreLeft = true; }
 
       this.isLoadingLeft = true;
       try {
@@ -63,6 +66,7 @@ export const useIdsStore = defineStore('ids', {
           params: { search: this.searchLeft, page: this.pageLeft, limit: 20 }
         });
         this.unselected.push(...data.data);
+        this.hasMoreLeft = data.hasMore;
       } finally {
         this.isLoadingLeft = false;
       }
@@ -70,7 +74,7 @@ export const useIdsStore = defineStore('ids', {
 
     async fetchSelected(reset = false) {
       if (this.isLoadingRight && !reset) return;
-      if (reset) { this.pageRight = 1; this.selected = []; }
+      if (reset) { this.pageRight = 1; this.selected = []; this.hasMoreRight = true; }
 
       this.isLoadingRight = true;
       try {
@@ -78,6 +82,7 @@ export const useIdsStore = defineStore('ids', {
           params: { search: this.searchRight, page: this.pageRight, limit: 20 }
         });
         this.selected.push(...data.data);
+        this.hasMoreRight = data.hasMore;
       } finally {
         this.isLoadingRight = false;
       }
@@ -349,11 +354,13 @@ export const useIdsStore = defineStore('ids', {
 
     // ==== ЗАГРУЗКА СЛЕДУЮЩЕЙ СТРАНИЦЫ (для инфинити-скролла) ====
     loadMoreLeft() {
+      if (!this.isLoadingLeft && !this.hasMoreLeft) return;
       this.pageLeft++;
       return this.fetchUnselected(false);
     },
 
     loadMoreRight() {
+      if (!this.isLoadingRight && !this.hasMoreRight) return;
       this.pageRight++;
       return this.fetchSelected(false);
     },

@@ -48,7 +48,11 @@ function getPaginatedData(sourceArray, search, page, limit) {
     // Пагинация
     const startIndex = (page - 1) * limit;
     const endIndex = page * limit;
-    return result.slice(startIndex, endIndex);
+    return {
+        data: result.slice(startIndex, endIndex),
+        // Есть ли ещё элементы после этой страницы
+        hasMore: endIndex < result.length,
+    };
 }
 
 // ==========================================
@@ -61,8 +65,8 @@ app.get('/api/unselected', (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const search = req.query.search || '';
 
-    const data = getPaginatedData(unselectedIds, search, page, limit);
-    res.json({ data, page, limit });
+    const { data, hasMore } = getPaginatedData(unselectedIds, search, page, limit);
+    res.json({ data, hasMore, page, limit });
 });
 
 // GET: Получить элементы правого окна (Выбранные)
@@ -71,8 +75,8 @@ app.get('/api/selected', (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const search = req.query.search || '';
 
-    const data = getPaginatedData(selectedIds, search, page, limit);
-    res.json({ data, page, limit });
+    const { data, hasMore } = getPaginatedData(selectedIds, search, page, limit);
+    res.json({ data, hasMore, page, limit });
 });
 
 // POST: Батч добавления новых элементов (раз в 10 сек с фронта)
