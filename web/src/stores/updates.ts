@@ -4,10 +4,8 @@ import type { UpdateAction } from '../types';
 
 const UPDATES_INTERVAL = 1000; // 1 секунда (обновления)
 
-// --- Таймер (module-scope, а не window.*) ---
 let updatesTimeout: ReturnType<typeof setTimeout> | null = null;
 
-// --- Хелперы localStorage ---
 const getStoredUpdates = (): UpdateAction[] => JSON.parse(localStorage.getItem('pendingUpdates') || '[]');
 const setStoredUpdates = (actions: UpdateAction[]) => {
   localStorage.setItem('pendingUpdates', JSON.stringify(actions));
@@ -42,11 +40,9 @@ export const useUpdatesStore = defineStore('updates', {
         localStorage.setItem('updatesStatus', 'idle');
       } catch (error) {
         console.error('Ошибка отправки обновлений:', error);
-        // Очередь остаётся в localStorage — повтор отправится при следующем действии/перезагрузке
       }
     },
 
-    // Таймер на оставшуюся часть окна; повторными кликами deadline не сдвигаем
     scheduleUpdates(delay: number) {
       if (updatesTimeout) return;
       updatesTimeout = setTimeout(async () => {
@@ -55,7 +51,6 @@ export const useUpdatesStore = defineStore('updates', {
       }, delay);
     },
 
-    // Добавляет действие в очередь и решает: отправить сразу или копить до конца окна
     enqueueUpdate(action: UpdateAction) {
       const queue = getStoredUpdates();
       queue.push(action);
@@ -70,7 +65,7 @@ export const useUpdatesStore = defineStore('updates', {
         localStorage.setItem('updatesStatus', 'pending');
         this.scheduleUpdates(UPDATES_INTERVAL - elapsed);
       } else {
-        this.sendUpdates(); // первый запрос — отправляем сразу, не ждём 1 секунду
+        this.sendUpdates();
       }
     },
 

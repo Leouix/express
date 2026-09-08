@@ -26,7 +26,6 @@ onUnmounted(() => appStore.dispose());
 useInfiniteScroll(leftList, () => { store.loadMoreLeft(); }, { intervalMs: 2000 });
 useInfiniteScroll(rightList, () => { store.loadMoreRight(); }, { intervalMs: 2000 });
 
-// Убираем нецифровые символы из поля ввода по одному (буква удаляется, цифры остаются)
 const filterManualId = () => {
   additionsStore.newManualId = additionsStore.newManualId.replace(/\D/g, '').slice(0, 15);
 };
@@ -35,7 +34,6 @@ const filterManualId = () => {
 
 <template>
   <div class="app-container">
-    <!-- Блок добавления новых элементов -->
     <div class="add-bar">
       <input v-model="newManualId" type="text" inputmode="numeric" maxlength="15" @input="filterManualId" placeholder="Введите новый ID (до 15 цифр)" />
       <button @click="additionsStore.addNewId">Добавить в очередь</button>
@@ -52,7 +50,6 @@ const filterManualId = () => {
     </div>
 
     <div class="panes">
-      <!-- ================= ЛЕВОЕ ОКНО (Невыбранные) ================= -->
       <div class="pane">
         <h3>Доступные ({{ unselected.length }} загружено)</h3>
         <input v-model="searchLeft" @input="store.onSearchLeft" placeholder="Поиск по ID..." class="search-input" />
@@ -68,16 +65,11 @@ const filterManualId = () => {
         </div>
       </div>
 
-      <!-- ================= ПРАВОЕ ОКНО (Выбранные + DnD) ================= -->
       <div class="pane">
         <h3>Выбранные (Drag&Drop)</h3>
         <input v-model="searchRight" @input="store.onSearchRight" placeholder="Поиск по ID..." class="search-input" />
         
         <div class="list-container" ref="rightList">
-          <!-- 
-             vuedraggable сам обновляет массив selected при перетаскивании. 
-             @end срабатывает, когда мы отпустили элемент.
-          -->
           <draggable 
             v-model="selected" 
             :item-key="el => el"
@@ -98,7 +90,6 @@ const filterManualId = () => {
 
 
 <style scoped>
-/* Базовые стили для наглядности */
 .app-container { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; }
 .add-bar { margin-bottom: 20px; display: flex; gap: 10px; align-items: center; }
 .status { color: #666; font-size: 0.9em; }

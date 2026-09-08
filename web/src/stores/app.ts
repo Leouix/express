@@ -23,12 +23,10 @@ export const useAppStore = defineStore('app', {
         return;
       }
 
-      // Чистим локальные очереди, статусы и списки
       useAdditionsStore().clear();
       useUpdatesStore().clear();
       useIdsStore().resetLists();
 
-      // Перезагружаем оба списка
       this.refresh();
     },
 

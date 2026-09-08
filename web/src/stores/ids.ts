@@ -22,9 +22,6 @@ export const useIdsStore = defineStore('ids', {
   }),
 
   actions: {
-    // ==========================================
-    // 1. ЗАПРОСЫ НА СЕРВЕР (ФЕТЧИНГ)
-    // ==========================================
     async fetchUnselected(reset = false) {
       if (this.isLoadingLeft && !reset) return;
       if (reset) { this.pageLeft = 1; this.unselected = []; this.hasMoreLeft = true; }
@@ -57,7 +54,6 @@ export const useIdsStore = defineStore('ids', {
       }
     },
 
-    // ==== ЗАГРУЗКА СЛЕДУЮЩЕЙ СТРАНИЦЫ (для инфинити-скролла) ====
     loadMoreLeft() {
       if (this.isLoadingLeft || !this.hasMoreLeft) return;
       this.pageLeft++;
@@ -70,9 +66,6 @@ export const useIdsStore = defineStore('ids', {
       return this.fetchSelected(false);
     },
 
-    // ==========================================
-    // 2. ПОИСК
-    // ==========================================
     onSearchLeft() {
       this.fetchUnselected(true);
     },
@@ -81,15 +74,10 @@ export const useIdsStore = defineStore('ids', {
       this.fetchSelected(true);
     },
 
-    // ==========================================
-    // 3. ДЕЙСТВИЯ ЮЗЕРА (списки + очередь обновлений)
-    // ==========================================
     selectItem(id: number) {
-      // Оптимистичное UI-обновление
       this.unselected = this.unselected.filter(item => item !== id);
       this.selected.push(id);
 
-      // Кладём в очередь
       useUpdatesStore().enqueueUpdate({ type: 'SELECT', id });
     },
 
@@ -106,40 +94,26 @@ export const useIdsStore = defineStore('ids', {
       useUpdatesStore().enqueueUpdate({ type: 'UNSELECT', id });
     },
 
-    // Срабатывает, когда отпустили мышку после перетаскивания
     onDragEnd(event: { newIndex: number }) {
       const newIndex = event.newIndex;
-      // Массив selected УЖЕ обновлён vuedraggable на момент вызова @end
       const movedId = this.selected[newIndex];
 
-      // Элемент, который теперь стоит ПОСЛЕ перетащенного
       const beforeId = newIndex + 1 < this.selected.length ? this.selected[newIndex + 1] : null;
 
       const action: UpdateAction = { type: 'MOVE', id: movedId, beforeId };
       useUpdatesStore().enqueueUpdate(action);
     },
 
-    // ==========================================
-    // 4. ВСПОМОГАТЕЛЬНЫЕ ДЕЙСТВИЯ (для batch-стора)
-    // ==========================================
-
-    // Добавляет подтверждённые сервером ID в невыбранную колонку
     appendUnselected(ids: number[]) {
       this.unselected.push(...ids);
-      // Держим массив отсортированным: бинарный поиск в unselectItem
-      // предполагает отсортированную последовательность.
       this.unselected.sort((a, b) => a - b);
     },
 
-    // Убирает дубликаты из левой колонки после ответа сервера.
-    // Никогда не трогаем selected: ID мог быть перемещён в правое окно
-    // до того, как сервер подтвердил дубликат добавления.
     removeIds(ids: number[]) {
       const dupSet = new Set(ids.map(Number));
       this.unselected = this.unselected.filter(id => !dupSet.has(id));
     },
 
-    // Сбрасывает пагинацию и состояние списков (используется при resetAll)
     resetLists() {
       this.searchLeft = '';
       this.searchRight = '';
